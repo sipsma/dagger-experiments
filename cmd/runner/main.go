@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"dagger.io/dagger"
@@ -13,23 +14,32 @@ import (
 func main() {
 	ctx := context.Background()
 
-	token, ok := os.LookupEnv("GHA_ACTIONS_TOKEN")
+	token, ok := os.LookupEnv("GHA_RUNNER_TOKEN")
 	if !ok {
-		panic(fmt.Errorf("GHA_ACTIONS_TOKEN is not set"))
+		panic(fmt.Errorf("GHA_RUNNER_TOKEN is not set"))
 	}
-	repo, ok := os.LookupEnv("GHA_ACTIONS_REPO")
+	repo, ok := os.LookupEnv("GHA_RUNNER_REPO")
 	if !ok {
-		panic(fmt.Errorf("GHA_ACTIONS_REPO is not set"))
+		panic(fmt.Errorf("GHA_RUNNER_REPO is not set"))
 	}
 
 	labels := []string{"dagger-runner"}
-	if envLabels, ok := os.LookupEnv("GHA_ACTIONS_LABELS"); ok {
+	if envLabels, ok := os.LookupEnv("GHA_RUNNER_LABELS"); ok {
 		labels = strings.Split(envLabels, ",")
 	}
 
-	runnerName := "test-dagger-runner"
-	if envRunnerName, ok := os.LookupEnv("GHA_ACTIONS_RUNNER_NAME"); ok {
-		runnerName = envRunnerName
+	runnerPrefix := "test-dagger-runner"
+	if envRunnerPrefix, ok := os.LookupEnv("GHA_RUNNER_RUNNER_PREFIX"); ok {
+		runnerPrefix = envRunnerPrefix
+	}
+
+	count := 2
+	if envCount, ok := os.LookupEnv("GHA_RUNNER_COUNT"); ok {
+		var err error
+		count, err = strconv.Atoi(envCount)
+		if err != nil {
+			panic(fmt.Errorf("GHA_RUNNER_COUNT is not a valid integer: %w", err))
+		}
 	}
 
 	c, err := dagger.Connect(ctx, dagger.WithLogOutput(os.Stderr))
@@ -38,14 +48,13 @@ func main() {
 	}
 	defer c.Close()
 
-	ctr, err := actionsrunner.ActionsRunner(c, token, repo, runnerName, labels)
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = ctr.WithExec(nil, dagger.ContainerWithExecOpts{
-		ExperimentalPrivilegedNesting: true,
-	}).ExitCode(ctx)
+	err = actionsrunner.Run(ctx, c, actionsrunner.Config{
+		Token:            token,
+		Repo:             repo,
+		Labels:           labels,
+		RunnerNamePrefix: runnerPrefix,
+		Count:            count,
+	})
 	if err != nil {
 		panic(err)
 	}
