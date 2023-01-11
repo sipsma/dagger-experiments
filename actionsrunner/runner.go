@@ -36,10 +36,19 @@ func Run(ctx context.Context, c *dagger.Client, cfg Config) error {
 	base := c.Container().
 		From("mcr.microsoft.com/dotnet/runtime-deps:6.0").
 		WithExec([]string{"apt-get", "update"}).
-		WithExec([]string{"useradd", "runner", "--create-home"})
+		WithExec([]string{"apt-get", "install", "-y",
+			"curl",
+			"build-essential",
+			"sudo",
+		}).
+		WithExec([]string{"sh", "-c", strings.Join([]string{
+			"groupadd -g 121 runner",
+			"useradd -mr -d /home/runner -u 1001 -g 121 runner",
+			"usermod -aG sudo runner",
+			"echo '%sudo ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers",
+		}, " && ")})
 
 	runnerDir := base.
-		WithExec([]string{"apt-get", "install", "-y", "curl"}).
 		WithMountedDirectory("/opt/runner", c.Directory()).
 		WithWorkdir("/opt/runner").
 		WithExec([]string{"chown", "runner:runner", "/opt/runner"}).
