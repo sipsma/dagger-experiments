@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: "github.com/dagger/dagger"
+          repository: "dagger/dagger"
           ref: "main"
       - uses: actions/setup-go@v3
         with:
