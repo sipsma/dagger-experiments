@@ -109,6 +109,9 @@ func (h *handler) Handle(ctx context.Context, eventType, deliveryID string, payl
 	if err := json.Unmarshal(payload, &event); err != nil {
 		return err
 	}
+	if event.GetAction() != "queued" {
+		return nil
+	}
 	runnerLabels := event.WorkflowJob.Labels
 	if len(runnerLabels) == 0 {
 		return nil
