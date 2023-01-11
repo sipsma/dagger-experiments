@@ -81,7 +81,7 @@ func main() {
 
 	http.Handle("/", githubapp.NewDefaultEventDispatcher(cfg, h))
 
-	addr := fmt.Sprintf("%s:%d", "127.0.0.1", 45363)
+	addr := fmt.Sprintf("%s:%d", "0.0.0.0", 45363)
 	err = http.ListenAndServe(addr, nil)
 	if err != nil {
 		panic(err)
