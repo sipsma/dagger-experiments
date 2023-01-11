@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -13,12 +14,13 @@ import (
 	"github.com/google/go-github/v48/github"
 	"github.com/palantir/go-githubapp/githubapp"
 	"github.com/sipsma/dagger-experiments/actionsrunner"
+	"golang.org/x/oauth2"
 )
 
 func main() {
 	ctx := context.Background()
 
-	token, ok := os.LookupEnv("GHA_RUNNER_TOKEN")
+	paToken, ok := os.LookupEnv("GHA_RUNNER_TOKEN")
 	if !ok {
 		panic(fmt.Errorf("GHA_RUNNER_TOKEN is not set"))
 	}
@@ -73,7 +75,7 @@ func main() {
 
 	h := &handler{
 		daggerClient: c,
-		token:        token,
+		paToken:      paToken,
 		repo:         repo,
 		labels:       labels,
 		runnerPrefix: runnerPrefix,
@@ -90,7 +92,7 @@ func main() {
 
 type handler struct {
 	daggerClient *dagger.Client
-	token        string
+	paToken      string
 	repo         string
 	labels       []string
 	runnerPrefix string
@@ -131,10 +133,35 @@ func (h *handler) Handle(ctx context.Context, eventType, deliveryID string, payl
 		return nil
 	}
 
+	// setup an http client that uses the personal access token
+	// to authenticate to github using oauth
+	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: h.paToken})
+	tc := oauth2.NewClient(ctx, ts)
+	ghClient := github.NewClient(tc)
+
+	// obtain the owner and repo from the repo url
+	u, err := url.Parse(h.repo)
+	if err != nil {
+		return err
+	}
+	parts := strings.Split(u.Path, "/")
+	if len(parts) != 3 {
+		return fmt.Errorf("invalid repo url: %s", h.repo)
+	}
+	owner := parts[1]
+	repo := parts[2]
+	runnerToken, resp, err := ghClient.Actions.CreateRegistrationToken(ctx, owner, repo)
+	if err != nil {
+		return fmt.Errorf("failed to create runner token: %w", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
+
 	go func() {
 		fmt.Println("starting actions runner", eventType)
 		err := actionsrunner.Run(context.TODO(), h.daggerClient, actionsrunner.Config{
-			Token:            h.token,
+			Token:            *runnerToken.Token,
 			Repo:             h.repo,
 			Labels:           h.labels,
 			RunnerNamePrefix: h.runnerPrefix,

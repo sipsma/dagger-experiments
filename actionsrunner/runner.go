@@ -3,12 +3,15 @@ package actionsrunner
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 
 	"dagger.io/dagger"
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 )
+
+const runnerVersion = "2.300.2"
 
 type Config struct {
 	Token            string
@@ -22,12 +25,35 @@ func Run(ctx context.Context, c *dagger.Client, cfg Config) error {
 	if cfg.Count == 0 {
 		return fmt.Errorf("invalid count %d", cfg.Count)
 	}
-	ctr := c.Container().
-		From("myoung34/github-runner:latest").
-		WithEnvVariable("ACCESS_TOKEN", cfg.Token).
-		WithEnvVariable("REPO_URL", cfg.Repo).
-		WithEnvVariable("LABELS", strings.Join(cfg.Labels, ",")).
-		WithEnvVariable("EPHEMERAL", "true")
+
+	arch := "x64"
+	if runtime.GOARCH == "arm64" {
+		arch = "arm64"
+	}
+	runnerFilename := "actions-runner-linux-" + arch + "-" + runnerVersion + ".tar.gz"
+	runnerURL := "https://github.com/actions/runner/releases/download/v" + runnerVersion + "/" + runnerFilename
+
+	base := c.Container().
+		From("mcr.microsoft.com/dotnet/runtime-deps:6.0").
+		WithExec([]string{"apt-get", "update"}).
+		WithExec([]string{"useradd", "runner"})
+
+	runnerDir := base.
+		WithExec([]string{"apt-get", "install", "-y", "curl"}).
+		WithMountedDirectory("/opt/runner", c.Directory()).
+		WithWorkdir("/opt/runner").
+		WithExec([]string{"chown", "runner:runner", "/opt/runner"}).
+		WithUser("runner").
+		WithExec([]string{"curl", "-OL", runnerURL}).
+		WithExec([]string{"tar", "-zxf", runnerFilename}).
+		WithExec([]string{"rm", runnerFilename}).
+		Directory("/opt/runner")
+
+	installed := base.
+		WithMountedDirectory("/opt/runner", runnerDir).
+		WithWorkdir("/opt/runner").
+		WithExec([]string{"./bin/installdependencies.sh"}).
+		WithUser("runner")
 
 	eg, ctx := errgroup.WithContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
@@ -35,21 +61,28 @@ func Run(ctx context.Context, c *dagger.Client, cfg Config) error {
 	for i := 0; i < cfg.Count; i++ {
 		eg.Go(func() error {
 			defer cancel()
-			for { // loop exits when context is canceled which results in non-nil error below
-				// get a random uuid
-				id, err := uuid.NewRandom()
-				if err != nil {
-					return err
-				}
-				_, err = ctr.
-					WithEnvVariable("RUNNER_NAME", cfg.RunnerNamePrefix+"-"+id.String()).
-					WithExec(nil, dagger.ContainerWithExecOpts{
-						ExperimentalPrivilegedNesting: true,
-					}).ExitCode(ctx)
-				if err != nil {
-					return err
-				}
+			// get a random uuid
+			id, err := uuid.NewRandom()
+			if err != nil {
+				return err
 			}
+			_, err = installed.
+				WithExec([]string{"./config.sh",
+					"--url", cfg.Repo,
+					"--token", cfg.Token,
+					"--ephemeral",
+					"--labels", strings.Join(cfg.Labels, ","),
+					"--name", cfg.RunnerNamePrefix + "-" + id.String(),
+					"--unattended",
+				}).
+				WithExec([]string{"./run.sh"}, dagger.ContainerWithExecOpts{
+					ExperimentalPrivilegedNesting: true,
+				}).
+				ExitCode(ctx)
+			if err != nil {
+				panic(err)
+			}
+			return nil
 		})
 	}
 
