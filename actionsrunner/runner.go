@@ -36,7 +36,7 @@ func Run(ctx context.Context, c *dagger.Client, cfg Config) error {
 	base := c.Container().
 		From("mcr.microsoft.com/dotnet/runtime-deps:6.0").
 		WithExec([]string{"apt-get", "update"}).
-		WithExec([]string{"useradd", "runner"})
+		WithExec([]string{"useradd", "runner", "--create-home"})
 
 	runnerDir := base.
 		WithExec([]string{"apt-get", "install", "-y", "curl"}).
