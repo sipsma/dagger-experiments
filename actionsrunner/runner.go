@@ -2,6 +2,7 @@ package actionsrunner
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"dagger.io/dagger"
@@ -18,6 +19,9 @@ type Config struct {
 }
 
 func Run(ctx context.Context, c *dagger.Client, cfg Config) error {
+	if cfg.Count == 0 {
+		return fmt.Errorf("invalid count %d", cfg.Count)
+	}
 	ctr := c.Container().
 		From("myoung34/github-runner:latest").
 		WithEnvVariable("ACCESS_TOKEN", cfg.Token).
