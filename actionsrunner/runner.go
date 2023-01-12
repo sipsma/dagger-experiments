@@ -61,8 +61,7 @@ func Run(ctx context.Context, c *dagger.Client, cfg Config) error {
 	installed := base.
 		WithMountedDirectory("/opt/runner", runnerDir).
 		WithWorkdir("/opt/runner").
-		WithExec([]string{"./bin/installdependencies.sh"}).
-		WithUser("runner")
+		WithExec([]string{"./bin/installdependencies.sh"})
 
 	eg, ctx := errgroup.WithContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
@@ -76,7 +75,7 @@ func Run(ctx context.Context, c *dagger.Client, cfg Config) error {
 				return err
 			}
 			_, err = installed.
-				WithExec([]string{"./config.sh",
+				WithExec([]string{"sudo", "-u", "runner", "-g", "runner", "./config.sh",
 					"--url", cfg.Repo,
 					"--token", cfg.Token,
 					"--ephemeral",
@@ -84,7 +83,11 @@ func Run(ctx context.Context, c *dagger.Client, cfg Config) error {
 					"--name", cfg.RunnerNamePrefix + "-" + id.String(),
 					"--unattended",
 				}).
-				WithExec([]string{"./run.sh"}, dagger.ContainerWithExecOpts{
+				WithExec([]string{"sh", "-c", strings.Join([]string{
+					"mkdir -m 0777 -p /_work",
+					"cd /_work",
+					"sudo -u runner -g runner --preserve-env=DAGGER_SESSION_PORT,DAGGER_SESSION_TOKEN /opt/runner/run.sh",
+				}, " && ")}, dagger.ContainerWithExecOpts{
 					ExperimentalPrivilegedNesting: true,
 				}).
 				ExitCode(ctx)
