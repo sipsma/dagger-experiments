@@ -1,0 +1,16 @@
+name: 'Test Action for setting up latest dagger CLI'
+description: 'Test Action for setting up latest dagger CLI'
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v3
+      with:
+        repository: "sipsma/dagger"
+        ref: 'entrypoints'
+    - uses: actions/setup-go@v3
+      with:
+        go-version: "1.20"
+    - run: go build -o /usr/local/bin/dagger ./cmd/dagger
+      shell: bash
+      env:
+        CGO_ENABLED: "0"
