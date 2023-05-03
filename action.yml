@@ -14,7 +14,7 @@ runs:
       shell: bash
       env:
         CGO_ENABLED: "0"
-    - run: echo "DAGGER_WORKDIR=${{ github.repositoryUrl }}#${{ github.ref_name }}" >> $GITHUB_ENV
+    - run: echo "DAGGER_WORKDIR=${{ github.repositoryUrl }}#${{ github.sha }}" >> $GITHUB_ENV
       shell: bash
       env:
         CGO_ENABLED: "0"
