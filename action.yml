@@ -6,7 +6,7 @@ runs:
     - uses: actions/checkout@v3
       with:
         repository: "sipsma/dagger"
-        ref: 'entrypoints'
+        ref: 'entrypoints-gha'
     - uses: actions/setup-go@v3
       with:
         go-version: "1.20"
