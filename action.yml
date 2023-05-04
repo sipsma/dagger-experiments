@@ -16,5 +16,6 @@ runs:
         CGO_ENABLED: "0"
     - run: echo "DAGGER_WORKDIR=${{ github.repositoryUrl }}#${{ github.sha }}" >> $GITHUB_ENV
       shell: bash
-      env:
-        CGO_ENABLED: "0"
+    # This proves we are not reliant on the checkout
+    - run: rm -rf * .git
+      shell: bash
